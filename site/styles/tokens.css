@@ -1,8 +1,13 @@
+/* Precision Memory Agent design tokens — single source of truth.
+   Intentionally DARK-ONLY (no light-mode variant by design).
+   NOTE: --ease, --side-pad, --gutter, --radius-* are raw var() tokens,
+   consumed via var(...) in CSS / motion configs — they are NOT exposed
+   as Tailwind utilities (only the @theme-mapped color/font/container are). */
 :root {
   --bg: #0b0b0c;
   --surface: #15161a;
   --text: #f4f4f5;
-  --text-muted: #8a8a93;
+  --text-muted: #a1a1aa;
   --accent: #f5a524;
   --accent-2: #c9821b;
   --border: rgba(255, 255, 255, 0.08);
