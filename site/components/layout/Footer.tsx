@@ -2,9 +2,12 @@ import Link from "next/link";
 import { Container } from "./Container";
 import { footerCols } from "@/lib/nav";
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 export function Footer() {
   return (
     <footer className="mt-32 border-t border-border bg-surface py-16">
+      <h2 className="sr-only">Site footer</h2>
       <Container className="grid grid-cols-2 gap-10 md:grid-cols-5">
         {footerCols.map((c) => (
           <div key={c.heading}>
@@ -18,7 +21,7 @@ export function Footer() {
         ))}
       </Container>
       <Container className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-xs text-text-muted md:flex-row">
-        <span>© {new Date().getFullYear()} Precision Memory Agent</span>
+        <span>© {CURRENT_YEAR} Precision Memory Agent</span>
         <Link href="/legal" className="hover:text-text">Privacy &amp; Terms</Link>
       </Container>
     </footer>

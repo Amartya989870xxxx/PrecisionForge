@@ -1,3 +1,4 @@
+// Arrays are deeply readonly (as const). Consuming functions should type params as readonly NavItem[] / readonly arrays.
 export const primaryNav = [
   { href: "/about", label: "About" },
   { href: "/method", label: "Method" },
