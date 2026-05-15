@@ -33,6 +33,11 @@ Jacobi `1/H_ii`, half-Jacobi, and the inverse-eigenvalue diagonal), projected
 to respect the harness precision-ratio bound, and every iterate is scored with
 the exact harness spread metric so the returned vector is the global best
 actually observed. The solution is deterministic and cached per attractor.
+If a Hessian is not strictly positive-definite (possible on the anisotropic
+L3 held-out operators), the solver lifts it to the nearest PSD-shifted
+operator and still solves for the optimal diagonal, rather than degenerating
+to `pi = 1`. The shift is a uniform spectral offset, so the resulting
+diagonal remains a strong preconditioner for the original Hessian.
 
 The branch decision is based on nearest-pattern cosine confidence. Public
 corrupted queries are well below `0.82`, while anisotropy probes are above
@@ -63,7 +68,9 @@ Code quality:
 
 - Single adapter file, no extra dependencies, deterministic output.
 - Explicit positivity, clipping, and mean normalization before returning.
-- Defensive fallbacks for zero queries and unstable Hessians.
+- Defensive fallbacks: zero/degenerate queries return `pi = 1`; non-SPD or
+  near-singular Hessians are PSD-regularised and still solved, never bailing
+  to a degenerate identity precision.
 
 ## Dependencies
 
