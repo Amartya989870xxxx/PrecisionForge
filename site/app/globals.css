@@ -13,6 +13,7 @@
   --font-body: var(--font-body), system-ui, sans-serif;
   --font-mono: var(--font-mono), monospace;
   --container-container: var(--container-max);
+  --ease-brand: var(--ease);
 }
 
 html { scroll-behavior: auto; }
