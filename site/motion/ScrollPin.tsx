@@ -4,12 +4,13 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useReducedMotion } from "./useReducedMotion";
 
+gsap.registerPlugin(ScrollTrigger);
+
 export function ScrollPin({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   const reduced = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (reduced || !ref.current) return;
-    gsap.registerPlugin(ScrollTrigger);
     const st = ScrollTrigger.create({ trigger: ref.current, start: "top top", end: "+=80%", pin: true, pinSpacing: true });
     return () => st.kill();
   }, [reduced]);

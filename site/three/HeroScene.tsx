@@ -1,6 +1,6 @@
 "use client";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { latticePositions } from "./lattice";
 
@@ -24,9 +24,50 @@ function Points() {
 }
 
 export function HeroScene() {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(true);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    let visible = true;
+    let onScreen = true;
+
+    const sync = () => setActive(visible && onScreen);
+
+    const onVisibility = () => {
+      visible = document.visibilityState !== "hidden";
+      sync();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    let io: IntersectionObserver | undefined;
+    if (el && typeof IntersectionObserver !== "undefined") {
+      io = new IntersectionObserver(
+        (entries) => {
+          onScreen = entries[0]?.isIntersecting ?? true;
+          sync();
+        },
+        { threshold: 0 },
+      );
+      io.observe(el);
+    }
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      io?.disconnect();
+    };
+  }, []);
+
   return (
-    <Canvas dpr={[1, 2]} camera={{ position: [0, 0, 10], fov: 55 }} aria-hidden>
-      <Points />
-    </Canvas>
+    <div ref={wrapRef} className="h-full w-full">
+      <Canvas
+        dpr={[1, 2]}
+        camera={{ position: [0, 0, 10], fov: 55 }}
+        frameloop={active ? "always" : "never"}
+        aria-hidden
+      >
+        <Points />
+      </Canvas>
+    </div>
   );
 }

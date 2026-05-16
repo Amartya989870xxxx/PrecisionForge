@@ -5,7 +5,13 @@ import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/pagination";
 
-export function Carousel({ slides, perView = 1, autoplay = false }: { slides: React.ReactNode[]; perView?: number; autoplay?: boolean }) {
+export interface CarouselProps {
+  slides: React.ReactNode[];
+  perView?: number;
+  autoplay?: boolean;
+}
+
+export function Carousel({ slides, perView = 1, autoplay = false }: CarouselProps) {
   return (
     <Swiper
       modules={[Navigation, Pagination, Autoplay]}

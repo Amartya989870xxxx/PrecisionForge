@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated coverage artifacts (mirrors site/.gitignore /coverage).
+    "coverage/**",
   ]),
 ]);
 

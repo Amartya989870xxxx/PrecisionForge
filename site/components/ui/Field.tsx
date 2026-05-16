@@ -1,4 +1,12 @@
-export function Field({ label, name, type = "text", required = false, textarea = false }: { label: string; name: string; type?: string; required?: boolean; textarea?: boolean }) {
+export interface FieldProps {
+  label: string;
+  name: string;
+  type?: React.HTMLInputTypeAttribute;
+  required?: boolean;
+  textarea?: boolean;
+}
+
+export function Field({ label, name, type = "text", required = false, textarea = false }: FieldProps) {
   return (
     <label className="block">
       <span className="mb-2 block text-sm text-text-muted">{label}{required && " *"}</span>

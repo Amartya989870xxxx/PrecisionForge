@@ -21,7 +21,7 @@ describe("UI kit logic", () => {
   it("FilterRail emits selection", async () => {
     let selected = "";
     render(<FilterRail options={[{ id: "all", label: "All" }, { id: "ret", label: "Retrieval" }]} value="all" onChange={(v) => (selected = v)} />);
-    await userEvent.click(screen.getByRole("button", { name: "Retrieval" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Retrieval" }));
     expect(selected).toBe("ret");
   });
 });
