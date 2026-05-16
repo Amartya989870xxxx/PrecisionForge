@@ -6,7 +6,7 @@ export default function Hero() {
     <section style={{ position: 'relative', height: '100vh', width: '100%', overflow: 'hidden' }}>
       {/* Spline Background */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0 }}>
-        <Spline scene="https://prod.spline.design/nY-Qhr7LIRp5Scfe/scene.M" />
+        <Spline scene="https://prod.spline.design/nY-Qhr7LIRp5Scfe/scene.splinecode" />
       </div>
 
       {/* Dark Overlay */}
@@ -22,6 +22,28 @@ export default function Hero() {
           pointerEvents: 'none'
         }}
       />
+
+      {/* Invisible Clickable Overlay for the Spline Button */}
+      <a 
+        href="https://www.linkedin.com/in/amartyamajumder"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          position: 'absolute',
+          left: '50%',
+          bottom: '22%', /* Adjust this value if the button shifts on your screen */
+          transform: 'translateX(-50%)',
+          width: '280px',
+          height: '90px',
+          zIndex: 10,
+          cursor: 'pointer',
+          /* Uncomment the line below to visually debug the overlay position */
+          /* background: 'rgba(255, 0, 0, 0.3)', */
+        }}
+        title="Get in touch on LinkedIn"
+      >
+        <span style={{ display: 'none' }}>Get in touch</span>
+      </a>
 
       {/* Centered Content */}
       <div
