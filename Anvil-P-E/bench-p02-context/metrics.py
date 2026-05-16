@@ -28,9 +28,23 @@ def score_match(
     ctx: Context,
     ground_truth: dict[str, Any],
     k: int = 5,
+    confidence_threshold: float = 0.5,
 ) -> tuple[bool, float]:
+    """For decoys (family is None), 'correct' = returned NO confident matches.
+    A correct engine returns either empty similar_past_incidents OR all
+    matches with confidence below threshold.
+    """
     matches = (ctx.get("similar_past_incidents") or [])[:k]
-    target = ground_truth["family"]
+    target = ground_truth.get("family")
+
+    if target is None:  # decoy
+        confident = [m for m in matches
+                     if float(m.get("similarity", 0.0)) >= confidence_threshold]
+        in_top_k = len(confident) == 0   # success = no confident match
+        # Precision for decoys: 1.0 if no confident matches, otherwise 0.
+        precision = 1.0 if in_top_k else 0.0
+        return in_top_k, precision
+
     hits = [
         _family_from_incident_id(m.get("incident_id", "")) == target
         for m in matches
@@ -41,7 +55,12 @@ def score_match(
 
 
 def score_remediation(ctx: Context, ground_truth: dict[str, Any]) -> bool:
-    expected = ground_truth["expected_remediation"]
+    expected = ground_truth.get("expected_remediation")
+    if expected is None:  # decoy — engine should not propose remediations
+        suggestions = ctx.get("suggested_remediations") or []
+        confident = [s for s in suggestions
+                     if float(s.get("confidence", 0.0)) >= 0.5]
+        return len(confident) == 0
     return any(
         s.get("action") == expected
         for s in (ctx.get("suggested_remediations") or [])

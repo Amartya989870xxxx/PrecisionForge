@@ -32,12 +32,42 @@ class GenConfig:
     n_services: int = 12
     days: int = 7
     deploys: int = 30
-    topology_mutations: int = 8
+    # More topology mutations + higher rename weight kills the trivial
+    # "exact service name string match" baseline — most family-anchored
+    # services get renamed at least once before the eval window opens.
+    topology_mutations: int = 20
+    rename_weight: float = 0.8
     incidents_train: int = 24
     incidents_eval: int = 10
     incident_families: int = 5
     background_density: int = 200  # events per service-day
     start_ts: str = "2026-05-01T00:00:00Z"
+
+    # ---- L3 stretch features ----
+    # When True, services that have been renamed once are preferentially
+    # renamed again, producing cascading rename chains.
+    cascading_renames: bool = False
+    # Fraction of eval signals that are decoys — shapes with no matching
+    # family in train. Engines should NOT confidently match these.
+    decoy_rate: float = 0.0
+
+
+def stretch_config(seed: int = 42) -> "GenConfig":
+    """Council-aligned L3 stretch parameters."""
+    return GenConfig(
+        seed=seed,
+        n_services=30,
+        days=21,
+        deploys=80,
+        topology_mutations=80,
+        rename_weight=0.85,
+        incidents_train=60,
+        incidents_eval=25,
+        incident_families=8,
+        background_density=120,
+        cascading_renames=True,
+        decoy_rate=0.20,
+    )
 
 
 @dataclass
@@ -51,6 +81,39 @@ class Dataset:
 
 def _parse(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def _emit_decoy_incident(t,
+                         rng,
+                         alias,
+                         canonical,
+                         eval_list,
+                         signals_list,
+                         truth_list) -> None:
+    """Emit an eval incident that LOOKS like a family pattern but is noise.
+
+    A correct engine returns low-confidence / empty similar_past_incidents
+    for this signal. False-positive matches are penalised by the metric.
+    """
+    svc = alias[rng.choice(canonical)]
+    incident_id = f"DEC-{int(t.timestamp()) % 100000}"
+    # No deploy / metric / log pre-events — just a bare signal.
+    signal = {
+        "ts": _iso(t), "kind": "incident_signal",
+        "incident_id": incident_id,
+        "trigger": f"alert:{svc}/unknown_anomaly",
+        "service": svc,
+    }
+    eval_list.append(signal)
+    signals_list.append(signal)
+    truth_list.append({
+        "incident_id":              incident_id,
+        "family":                   None,           # no family = decoy
+        "trigger_service_live":     svc,
+        "trigger_service_canonical": svc,
+        "expected_remediation":     None,
+        "is_decoy":                 True,
+    })
 
 
 def _iso(dt: datetime) -> str:
@@ -82,14 +145,22 @@ def generate(cfg: GenConfig | None = None) -> Dataset:
     mutation_times = sorted(start + duration * rng.random()
                             for _ in range(cfg.topology_mutations))
     for mt in mutation_times:
+        other = max(0.0, (1.0 - cfg.rename_weight) / 2)
         change = rng.choices(
             ["rename", "dep_add", "dep_remove"],
-            weights=[0.6, 0.2, 0.2],
+            weights=[cfg.rename_weight, other, other],
         )[0]
         if change == "rename":
-            victim = rng.choice(canonical)
+            # When cascading is on, preferentially pick a service that's
+            # already been renamed at least once — producing chains.
+            if cfg.cascading_renames:
+                already_renamed = [s for s in canonical if alias[s] != s]
+                pool = already_renamed if (already_renamed and rng.random() < 0.7) else canonical
+                victim = rng.choice(pool)
+            else:
+                victim = rng.choice(canonical)
             old = alias[victim]
-            new = f"{victim}-r{rng.randint(2, 9)}"
+            new = f"{old}-r{rng.randint(2, 9)}"
             emit({
                 "ts": _iso(mt), "kind": "topology", "change": "rename",
                 "from_": old, "to": new,
@@ -114,13 +185,22 @@ def generate(cfg: GenConfig | None = None) -> Dataset:
         }, t)
 
     # ---- incident families & patterns ----
+    # Each family is anchored to a canonical service AND a specific
+    # remediation action. This kills the "always emit rollback" loophole —
+    # an agent must actually identify the family to predict the right action.
+    family_actions = ["rollback", "restart", "scale_up", "config_change", "failover"]
     family_services: dict[int, str] = {
         fam: rng.choice(canonical) for fam in range(cfg.incident_families)
+    }
+    family_action: dict[int, str] = {
+        fam: family_actions[fam % len(family_actions)]
+        for fam in range(cfg.incident_families)
     }
 
     def emit_incident(t: datetime, fam: int, is_eval: bool) -> None:
         canonical_svc = family_services[fam]
         live_svc = alias[canonical_svc]
+        action = family_action[fam]
         version = f"v{rng.randint(1, 9)}.{rng.randint(0, 99)}.{rng.randint(0, 9)}"
         prev_version = f"v{rng.randint(1, 9)}.{rng.randint(0, 99)}.{rng.randint(0, 9)}"
         upstream = alias[rng.choice([c for c in canonical if c != canonical_svc])]
@@ -152,7 +232,7 @@ def generate(cfg: GenConfig | None = None) -> Dataset:
         }
         remediation: Event = {
             "ts": _iso(t + timedelta(minutes=20)), "kind": "remediation",
-            "incident_id": incident_id, "action": "rollback",
+            "incident_id": incident_id, "action": action,
             "target": live_svc, "version": prev_version, "outcome": "resolved",
         }
 
@@ -167,7 +247,7 @@ def generate(cfg: GenConfig | None = None) -> Dataset:
                 "family":                   fam,
                 "trigger_service_live":     live_svc,
                 "trigger_service_canonical": canonical_svc,
-                "expected_remediation":     "rollback",
+                "expected_remediation":     action,
             })
         else:
             train.append(signal)
@@ -179,7 +259,17 @@ def generate(cfg: GenConfig | None = None) -> Dataset:
 
     for _ in range(cfg.incidents_eval):
         t = train_cutoff + (end - train_cutoff) * rng.random()
-        emit_incident(t, rng.randrange(cfg.incident_families), is_eval=True)
+        # Decoy: eval signal that has the same SHAPE as a real incident
+        # but doesn't belong to any family. Engines should NOT find a
+        # confident similar past incident.
+        if cfg.decoy_rate > 0 and rng.random() < cfg.decoy_rate:
+            _emit_decoy_incident(
+                t, rng, alias, canonical, eval_, signals, truth,
+            )
+        else:
+            emit_incident(
+                t, rng.randrange(cfg.incident_families), is_eval=True,
+            )
 
     # ---- background telemetry ----
     n_bg = cfg.n_services * cfg.days * cfg.background_density

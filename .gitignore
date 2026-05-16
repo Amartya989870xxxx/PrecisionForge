@@ -1,0 +1,9 @@
+# Brainstorming visual-companion scratch (superpowers)
+.superpowers/
+
+# Python
+__pycache__/
+*.pyc
+
+# Claude Code local harness state (machine-local; transient worktrees)
+.claude/

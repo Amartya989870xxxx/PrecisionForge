@@ -1,113 +1,104 @@
-# Anvil P-01 · CRDT-Native OLTP — Benchmark Harness
+# Anvil · P-01 · L3 Final Benchmark
 
-Reference benchmark for problem statement **P-01 · Conflict-Free Collaborative OLTP**.
+This is the **only** bench for P-01. Running it is the L3 evaluation. The output is the submission.
 
-Pure Python · stdlib only · no network access · no external dependencies.
-
-## Self-check (run this locally, often)
+## Quickstart
 
 ```bash
 cd bench-p01-crdt
-python self_check.py --adapter adapters.mine:Engine --fk-policy tombstone
+pip install -r requirements.txt
+python run.py \
+  --adapter adapters.dummy:DummyAdapter \
+  --fk-policy cascade
 ```
 
-Prints a pass/fail matrix and an indicative weighted score. Add `--quick` while iterating.
-
-## Full run
-
-```bash
-python run.py --adapter adapters.mine:Engine --fk-policy tombstone --out report.json
-```
-
-Exit code `0` if all axes pass, `1` otherwise.
-
-## Layout
+You should see a multi-line banner:
 
 ```
-adapter.py          # the abstract base every submission implements
-assertions.py       # invariant checkers
-harness.py          # scenario orchestration + scoring
-run.py              # full CLI entry point
-self_check.py       # condensed entry point for local iteration
-scenarios/
-  reference.py      # canonical 3-peer trace (Annex A)
-  chaos.py          # randomly-permuted sync orderings
-  randomized.py     # property-based random scenarios
-adapters/
-  dummy.py          # reference adapter; intentionally weak — for harness validation
+██████████████████████████████████████████████████████████████████████
+██████████████████████████████████████████████████████████████████████
+★★★     A N V I L   ·   P - 0 1   ·   L 3   F I N A L   B E N C H     ★★★
+★★★     Council Release · anvil-2026-p01-L3-final              ★★★
+★★★     2026-…                                                ★★★
+██████████████████████████████████████████████████████████████████████
+██████████████████████████████████████████████████████████████████████
 ```
 
-## Anti-gaming · how the benchmark resists hardcoding
+If you don't see this banner, you're running an outdated copy of the bench. Pull the latest from `main`.
 
-Three layers of evaluation. You see L1 and L2; you do not see L3.
+## What it tests
 
-**L1 — Canonical scenarios.** The 3-peer trace from Annex A and its sync-permuted twin. Pass these and your engine handles the documented edge cases.
+A single `python run.py` invocation runs the full L3 suite:
 
-**L2 — Property-based randomized scenarios.** The harness accepts `--randomized-seeds` with ANY integers. The generator produces fresh operation sequences from each seed. The assertions are *invariants* — not fixed expected outputs:
-
-- Convergence: all peers reach the same hash after sync-to-quiescence.
-- Uniqueness on `users.email` holds across the merged state.
-- Idempotent sync: a second sync pass at quiescence does not change state.
-
-A hardcoded solution passes L1 trivially. It fails L2 immediately because the expected hash is unknown until the scenario runs. **Run with arbitrary seeds locally**:
-
-```bash
-python run.py --adapter adapters.mine:Engine --fk-policy tombstone \
-  --randomized-seeds 9999 31415 27182 16180 11235 --rand-peers 5 --rand-ops 150
-```
-
-If your engine is correct, every seed passes. If it is hardcoded, none do.
-
-**L3 — Held-out adversarial scenarios.** The technical council holds a private set of seeds and hand-crafted edge cases at higher parameter values (more peers, denser conflicts, schema variants). Used only at final evaluation. Not distributed.
-
-## Writing an adapter
-
-Subclass `Adapter` in `adapters/<your_team>.py` and implement:
-
-| Method | Purpose |
+| Scenario | Tests |
 |---|---|
-| `open_peer(peer_id)` | Initialise a fresh peer with empty state |
-| `apply_schema(peer_id, stmts)` | Apply DDL |
-| `execute(peer_id, sql, params)` | Local DML (no sync) |
-| `sync(peer_a, peer_b)` | Pairwise bidirectional sync |
-| `snapshot_hash(peer_id)` | Deterministic hex hash of the peer's visible state |
-| `snapshot_state(peer_id)` | `{table: [row_dict, ...]}` ordered by PK |
-| `close()` | Tear down |
+| reference | The canonical 3-peer trace from the problem-statement annex |
+| cell-level-strict | Pure concurrent column merge on a row that is never deleted — LWW-on-row physically fails |
+| chaos (5 seeds) | Same operations, randomly permuted sync orderings — order-invariance check |
+| randomized (8 seeds) | Property-based random traces with data-preservation check |
+| composite_uniqueness | `UNIQUE(user_id, team_id)` — kills CRDTs that only handle single-column uniqueness |
+| multi_level_fk | `organizations → users → orders` — cascade through 3 FK levels |
+| high_density | 6 peers all INSERT the same email — extreme concurrent uniqueness |
+| long_run | 1500-op randomized stress + data preservation |
 
-For non-Python engines, the adapter bridges via subprocess / gRPC / HTTP to your real implementation.
+## Final score
 
-## What is judged
+The output JSON has `l3_final_score` as the headline number:
 
-Six axes, each pass/fail per the harness:
+```
+final = 0.6 × core_score + 0.4 × stretch_score
+```
 
-| Axis | Indicative weight | Source |
-|---|---|---|
-| Convergence | 0.30 | All peers reach an identical snapshot hash after the reference trace |
-| Uniqueness on `users.email` | 0.20 | No two live rows share an email after merge |
-| FK policy adherence | 0.15 | The engine's declared `--fk-policy` matches observed behaviour for `o1` against the deleted parent `u1` |
-| Cell-level merge | 0.10 | Concurrent updates to `u1.name` (peer A) and `u1.email` (peer B) are both preserved |
-| Order-invariance | 0.10 | The chaos scenario, with permuted sync orderings, produces the same final hash as the canonical run |
-| Randomized | 0.15 | All randomized seeds preserve convergence, uniqueness, and idempotent sync |
+- **core_score**: L1/L2 invariants (reference, cell-level-strict, chaos, randomized)
+- **stretch_score**: L3 hard scenarios (composite, multi-fk, high-density, long-run)
 
-Weights are illustrative — the technical council may rebalance before the event.
+Reported on a 0.0 – 1.0 scale.
 
-## Scenarios
+## Implementing your engine
 
-- **`reference`** — the canonical operation trace from Annex A. Tests uniqueness, FK-under-partition, cell-level merge, convergence.
-- **`chaos:seed=<n>`** — same trace, sync orderings permuted by seed. Tests order-invariance.
-- **`randomized:seed=<n>:peers=<m>:ops=<k>`** — fresh random op sequence per seed. Tests CRDT invariants on previously-unseen inputs.
+Subclass `Adapter` in `adapters/<your_team>.py`. Implement:
 
-## FK policy
+```python
+from adapter import Adapter
 
-Submissions declare their FK-under-partition policy via `--fk-policy {cascade|tombstone|orphan}`:
+class Engine(Adapter):
+    def open_peer(self, peer_id):           ...
+    def apply_schema(self, peer_id, stmts): ...
+    def execute(self, peer_id, sql, params=()): ...
+    def sync(self, peer_a, peer_b):         ...
+    def snapshot_hash(self, peer_id):       ...
+    def snapshot_state(self, peer_id):      ...   # {table: [row_dict, ...]}
+    def close(self):                        ...
+```
 
-- `cascade` — `o1` must NOT exist after merge
-- `tombstone` — `o1` is present but its `user_id` references a tombstoned row
-- `orphan` — `o1` is present with `user_id` set to NULL or a documented sentinel
+For non-Python engines, the adapter bridges via subprocess / gRPC / HTTP.
 
-The harness checks observed state against the declared policy.
+## FK policy declaration
 
-## Caveats
+Your engine declares one FK-under-partition policy and applies it uniformly:
 
-- Defaults are small and run in seconds. Wider chaos seed coverage and additional scenarios may be added before the event.
-- The dummy adapter exists to validate the harness — it deliberately fails invariants. Do not benchmark against it.
+| Policy | Behaviour |
+|---|---|
+| `cascade` | Children of a deleted parent are also deleted |
+| `tombstone` | Children remain; their `user_id` references a tombstoned row |
+| `orphan` | Children remain; their `user_id` is set to NULL or a documented sentinel |
+
+Switching policy mid-run, or picking different policies per table, is disqualifying.
+
+## Constraints
+
+- The bench is **frozen** — you do not modify `pcam_model.py`, `harness.py`, `assertions.py`, or any scenario file.
+- Precision matrices and merged states must satisfy the assertions listed in each scenario module.
+- One forward pass per query / one merge step per sync — no iterative refinement after observing dynamics.
+
+## Submission
+
+Paste the JSON output into the submission form's L3 Output field. Your demo video must show the L3 banner.
+
+## Anti-cheating
+
+- The output includes per-scenario state samples and snapshot hashes
+- The council reserves the right to re-run any submission on judges' machines
+- Submissions whose numbers can't be reproduced are disqualified
+
+## Pure stdlib + NumPy. CPU only. No GPU required.

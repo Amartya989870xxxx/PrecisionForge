@@ -148,16 +148,20 @@ class Engine(Adapter):
     def _geometry_precision(self, pattern_index: int) -> np.ndarray:
         """Optimal diagonal preconditioner at the identified attractor.
 
-        Builds the live frozen-model Hessian at the stored pattern and returns
-        the positive diagonal ``pi`` that minimises the eigen-spread of
-        ``diag(sqrt(pi)) H diag(sqrt(pi))`` subject to the harness ratio bound.
-        The result is cached per attractor (the map is deterministic).
+        Builds the live frozen-model Hessian at the *true equilibrium*
+        ``a* = find_equilibrium(x_i)`` — which sits near ``eta * R^-1 * x_i``,
+        not at ``x_i`` itself (paper Lemma E3; the harness scores anisotropy
+        at exactly this point, see ``metrics.anisotropy_reductions``). It then
+        returns the positive diagonal ``pi`` that minimises the eigen-spread
+        of ``diag(sqrt(pi)) H diag(sqrt(pi))`` subject to the harness ratio
+        bound. The result is cached per attractor (the map is deterministic).
         """
         cached = self._geom_cache.get(pattern_index)
         if cached is not None:
             return cached
 
-        H = self.model.hessian(self.X[pattern_index])
+        a_star = self.model.find_equilibrium(self.X[pattern_index])
+        H = self.model.hessian(a_star)
         H = 0.5 * (H + H.T)
         eig_H = np.linalg.eigvalsh(H)
         if eig_H[0] <= 1e-9:

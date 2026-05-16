@@ -28,12 +28,24 @@ class RandomizedConfig:
     p_update: float = 0.30
 
 
-def generate(cfg: RandomizedConfig) -> tuple[list[str], list, list[tuple[str, str]]]:
+def generate(cfg: RandomizedConfig) -> tuple[
+    list[str], list, list[tuple[str, str]], set[str], set[str],
+]:
+    """Generate a randomized scenario.
+
+    Returns (peers, ops, sync_tail, inserted_ids, deleted_ids).
+
+    `inserted_ids` and `deleted_ids` are used by the data-preservation
+    assertion to detect engines that silently drop rows (e.g. SQLite
+    INSERT OR REPLACE deleting a UNIQUE-conflict victim).
+    """
     rng = random.Random(cfg.seed)
     peers = [f"P{i}" for i in range(cfg.n_peers)]
     common_emails = ["alice@x.com", "bob@x.com", "carol@x.com", "dave@x.com"]
 
     known: dict[str, list[str]] = {p: [] for p in peers}
+    inserted_ids: set[str] = set()
+    deleted_ids: set[str] = set()
     next_uid = 0
     ops: list = []
 
@@ -50,6 +62,7 @@ def generate(cfg: RandomizedConfig) -> tuple[list[str], list, list[tuple[str, st
             uid = rng.choice(known[peer])
             ops.append(Stmt(peer, "DELETE FROM users WHERE id = ?", (uid,)))
             known[peer] = [u for u in known[peer] if u != uid]
+            deleted_ids.add(uid)
 
         elif roll < cfg.p_delete + cfg.p_update and known[peer]:
             uid = rng.choice(known[peer])
@@ -80,6 +93,7 @@ def generate(cfg: RandomizedConfig) -> tuple[list[str], list, list[tuple[str, st
                 (uid, email, f"name-{rng.randint(0, 999)}"),
             ))
             known[peer].append(uid)
+            inserted_ids.add(uid)
 
     sync_tail: list[tuple[str, str]] = []
     for _ in range(2):
@@ -87,4 +101,4 @@ def generate(cfg: RandomizedConfig) -> tuple[list[str], list, list[tuple[str, st
             for j in range(i + 1, len(peers)):
                 sync_tail.append((peers[i], peers[j]))
 
-    return peers, ops, sync_tail
+    return peers, ops, sync_tail, inserted_ids, deleted_ids

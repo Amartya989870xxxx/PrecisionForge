@@ -1,0 +1,16 @@
+{
+  "version": "anvil-2026-p02-l3-sample",
+  "description": "Sample L3 config. Council releases the real one at T-2h with private seeds.",
+  "seeds": [314159, 271828, 161803, 141421, 173205],
+  "config": {
+    "n_services": 30,
+    "days": 21,
+    "topology_mutations": 80,
+    "rename_weight": 0.85,
+    "incidents_train": 60,
+    "incidents_eval": 25,
+    "incident_families": 8,
+    "cascading_renames": true,
+    "decoy_rate": 0.20
+  }
+}

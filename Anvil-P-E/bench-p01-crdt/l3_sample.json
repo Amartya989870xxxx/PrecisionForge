@@ -1,0 +1,11 @@
+{
+  "version": "anvil-2026-p01-l3-sample",
+  "description": "Sample L3 config showing the schema. Council releases the real one at T-2h with private seeds and possibly hand-crafted scenario tweaks.",
+  "scenarios": [
+    {"name": "comp-A",     "type": "composite_uniqueness"},
+    {"name": "fk-chain-A", "type": "multi_level_fk"},
+    {"name": "dense-A",    "type": "high_density"},
+    {"name": "long-A",     "type": "long_run", "seed": 8675309, "n_ops": 1500},
+    {"name": "long-B",     "type": "long_run", "seed": 27182,   "n_ops": 1500}
+  ]
+}

@@ -113,3 +113,110 @@ def assert_cell_level_merge(state: dict[str, list[dict[str, Any]]]) -> Assertion
         False,
         f"u1={u1}; expected name='Alice Cooper', email='alice@ex.org'",
     )
+
+
+def assert_cell_level_strict(state: dict[str, list[dict[str, Any]]]) -> AssertionResult:
+    """Non-vacuous version: u1 cannot have been deleted (no DELETE happened
+    in this scenario, no cascade applies). Both concurrent column updates
+    MUST be present in the merged row.
+
+    This is the killer test for last-writer-wins-on-row implementations,
+    which lose one of the two concurrent updates by construction.
+    """
+    users = state.get("users", [])
+    u1 = next((u for u in users if u["id"] == "u1"), None)
+    if u1 is None:
+        return AssertionResult(
+            "cell-level-strict",
+            False,
+            "u1 absent — but no DELETE was issued and no cascade applies. "
+            "The engine has silently dropped a row.",
+        )
+    name_ok = u1.get("name") == "Alice Cooper"
+    email_ok = u1.get("email") == "alice@ex.org"
+    if name_ok and email_ok:
+        return AssertionResult(
+            "cell-level-strict",
+            True,
+            "both concurrent column updates preserved (real cell-level merge)",
+        )
+    missing = []
+    if not name_ok:
+        missing.append(f"name='{u1.get('name')}' (expected 'Alice Cooper')")
+    if not email_ok:
+        missing.append(f"email='{u1.get('email')}' (expected 'alice@ex.org')")
+    return AssertionResult(
+        "cell-level-strict",
+        False,
+        f"u1 preserved but {' and '.join(missing)} — likely LWW-on-row dropped a column update",
+    )
+
+
+def assert_data_preservation(
+    inserted_ids: set[str],
+    deleted_ids: set[str],
+    cascaded_ids: set[str],
+    state: dict[str, list[dict[str, Any]]],
+    table: str = "users",
+) -> AssertionResult:
+    """Every INSERTed id must end up in one of three places:
+        (a) present in the final `table`, OR
+        (b) explicitly DELETEd by some peer, OR
+        (c) cascade-deleted because a parent it referenced was deleted.
+
+    Anything else is silent data loss — an INSERT OR REPLACE that
+    dropped a row to satisfy a UNIQUE constraint, for instance.
+    """
+    final_ids = {u["id"] for u in state.get(table, [])}
+    unaccounted = inserted_ids - final_ids - deleted_ids - cascaded_ids
+    if not unaccounted:
+        return AssertionResult(
+            "data-preservation",
+            True,
+            f"all {len(inserted_ids)} inserted ids in `{table}` are accounted for",
+        )
+    return AssertionResult(
+        "data-preservation",
+        False,
+        f"{len(unaccounted)} ids inserted into `{table}` silently lost: "
+        f"{sorted(list(unaccounted))[:6]}{' …' if len(unaccounted) > 6 else ''}",
+    )
+
+
+def assert_fk_chain_integrity(
+    state: dict[str, list[dict[str, Any]]],
+) -> AssertionResult:
+    """For the multi-level FK scenario:
+       organizations -> users -> orders
+    No user may reference a non-existent org. No order may reference a
+    non-existent user (modulo the engine's declared FK policy — for
+    cascade engines, deleted-org descendants must be gone).
+    """
+    orgs = {o["id"] for o in state.get("organizations", [])}
+    users = state.get("users", [])
+    orders = state.get("orders", [])
+    user_ids = {u["id"] for u in users}
+
+    orphan_users = [u["id"] for u in users
+                    if u.get("org_id") not in orgs]
+    orphan_orders = [o["id"] for o in orders
+                     if o.get("user_id") not in user_ids]
+
+    issues = []
+    if orphan_users:
+        issues.append(f"users referencing deleted orgs: {orphan_users[:5]}")
+    if orphan_orders:
+        issues.append(f"orders referencing deleted users: {orphan_orders[:5]}")
+
+    if not issues:
+        return AssertionResult(
+            "fk-chain-integrity",
+            True,
+            f"chain consistent · {len(orgs)} orgs, {len(users)} users, "
+            f"{len(orders)} orders",
+        )
+    return AssertionResult(
+        "fk-chain-integrity",
+        False,
+        "; ".join(issues),
+    )
