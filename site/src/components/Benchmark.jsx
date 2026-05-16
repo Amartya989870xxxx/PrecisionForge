@@ -10,7 +10,8 @@ export default function Benchmark() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/benchmark');
+      const API_URL = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${API_URL}/api/benchmark`);
       if (!res.ok) {
         throw new Error(`Server responded with ${res.status}`);
       }
