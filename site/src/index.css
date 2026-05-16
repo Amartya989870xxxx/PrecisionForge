@@ -1,0 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=Inter:wght@300;400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0A0A0A;
+  --text: #FFFFFF;
+  --text-secondary: #888888;
+  --accent: #FF6B35;
+  --accent-dark: #CC4A1A;
+  --card-bg: rgba(255,255,255,0.03);
+  --card-border: rgba(255,107,53,0.2);
+  --font-heading: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+}
+
+html { scroll-behavior: auto; } /* Lenis handles smooth scroll */
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); overflow-x: hidden; }
