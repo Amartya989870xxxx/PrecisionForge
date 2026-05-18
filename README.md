@@ -6,7 +6,7 @@
 ---
 
 ## 🧠 The Concept: Breaking the Scalar Paradigm
-
+  
 In classical neural memory networks (such as continuous Hopfield networks or modern dense associative memories), retrieval is typically controlled by a **single scalar temperature parameter** (often denoted as $\beta$). This single knob governs the softmax distribution uniformly across all features. 
 
 **The Problem:** One scalar is never enough. When query vectors encounter real-world noise, partial masks, or heavy corruption, a global temperature forces the model to treat all dimensions equally. This lack of granularity often leads to hallucinated retrievals, blurred outputs, or unstable convergence.
